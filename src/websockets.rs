@@ -5,7 +5,6 @@ use crate::model::{
     WindowTickerEvent, DepthOrderBookEvent, KlineEvent, OrderBook, OrderTradeEvent, TradeEvent,
 };
 use error_chain::bail;
-use url::Url;
 use serde::{Deserialize, Serialize};
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -99,8 +98,7 @@ impl<'a> WebSockets<'a> {
     }
 
     fn connect_wss(&mut self, wss: &str) -> Result<()> {
-        let url = Url::parse(wss)?;
-        match connect(url) {
+        match connect(wss) {
             Ok(answer) => {
                 self.socket = Some(answer);
                 Ok(())

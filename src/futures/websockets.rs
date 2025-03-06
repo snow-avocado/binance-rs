@@ -7,7 +7,6 @@ use crate::model::{
 };
 use crate::futures::model;
 use error_chain::bail;
-use url::Url;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::net::TcpStream;
@@ -132,8 +131,7 @@ impl<'a> FuturesWebSockets<'a> {
     }
 
     fn connect_wss(&mut self, wss: &str) -> Result<()> {
-        let url = Url::parse(wss)?;
-        match connect(url) {
+        match connect(wss) {
             Ok(answer) => {
                 self.socket = Some(answer);
                 Ok(())
