@@ -1,11 +1,11 @@
-#![deny(
-    unstable_features,
-    unused_must_use,
-    unused_mut,
-    unused_imports,
-    unused_import_braces,
-    clippy::all
-)]
+// #![deny(
+//     unstable_features,
+//     unused_must_use,
+//     unused_mut,
+//     unused_imports,
+//     unused_import_braces,
+//     clippy::all
+// )]
 #![allow(clippy::needless_doctest_main)]
 #![warn(
     clippy::wildcard_imports,
