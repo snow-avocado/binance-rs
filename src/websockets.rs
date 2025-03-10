@@ -54,24 +54,31 @@ pub enum WebsocketEvent {
 pub struct WebSockets<'a> {
     pub socket: Option<(WebSocket<MaybeTlsStream<TcpStream>>, Response)>,
     handler: Box<dyn FnMut(WebsocketEvent) -> Result<()> + 'a>,
+    combined: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(untagged)]
 enum Events {
+    BookTickerEvent(BookTickerEvent),
+    OrderBook(OrderBook),
+    DepthOrderBookEvent(DepthOrderBookEvent),
     DayTickerEventAll(Vec<DayTickerEvent>),
     WindowTickerEventAll(Vec<WindowTickerEvent>),
     BalanceUpdateEvent(BalanceUpdateEvent),
     DayTickerEvent(DayTickerEvent),
     WindowTickerEvent(WindowTickerEvent),
-    BookTickerEvent(BookTickerEvent),
     AccountUpdateEvent(AccountUpdateEvent),
     OrderTradeEvent(OrderTradeEvent),
     AggrTradesEvent(AggrTradesEvent),
     TradeEvent(TradeEvent),
     KlineEvent(KlineEvent),
-    OrderBook(OrderBook),
-    DepthOrderBookEvent(DepthOrderBookEvent),
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct CombinedStreamEvents {
+    stream: String,
+    data: Events,
 }
 
 impl<'a> WebSockets<'a> {
@@ -82,18 +89,22 @@ impl<'a> WebSockets<'a> {
         WebSockets {
             socket: None,
             handler: Box::new(handler),
+            combined: false,
         }
     }
 
     pub fn connect(&mut self, subscription: &str) -> Result<()> {
+        self.combined = false;
         self.connect_wss(&WebsocketAPI::Default.params(subscription))
     }
 
     pub fn connect_with_config(&mut self, subscription: &str, config: &Config) -> Result<()> {
+        self.combined = false;
         self.connect_wss(&WebsocketAPI::Custom(config.ws_endpoint.clone()).params(subscription))
     }
 
     pub fn connect_multiple_streams(&mut self, endpoints: &[String]) -> Result<()> {
+        self.combined = true;
         self.connect_wss(&WebsocketAPI::MultiStream.params(&endpoints.join("/")))
     }
 
@@ -118,30 +129,31 @@ impl<'a> WebSockets<'a> {
     pub fn test_handle_msg(&mut self, msg: &str) -> Result<()> {
         self.handle_msg(msg)
     }
+    
 
     pub fn handle_msg(&mut self, msg: &str) -> Result<()> {
-        let value: serde_json::Value = serde_json::from_str(msg)?;
-
-        if let Some(data) = value.get("data") {
-            self.handle_msg(&data.to_string())?;
-            return Ok(());
+        let event_result = if self.combined {
+            serde_json::from_str::<CombinedStreamEvents>(msg).map(|c| c.data)
         }
+        else {
+            serde_json::from_str::<Events>(msg)
+        };
 
-        if let Ok(events) = serde_json::from_value::<Events>(value) {
+        if let Ok(events) = event_result {
             let action = match events {
+                Events::BookTickerEvent(v) => WebsocketEvent::BookTicker(v),
+                Events::OrderBook(v) => WebsocketEvent::OrderBook(v),
+                Events::DepthOrderBookEvent(v) => WebsocketEvent::DepthOrderBook(v),
+                Events::AggrTradesEvent(v) => WebsocketEvent::AggrTrades(v),
+                Events::TradeEvent(v) => WebsocketEvent::Trade(v),
                 Events::DayTickerEventAll(v) => WebsocketEvent::DayTickerAll(v),
                 Events::WindowTickerEventAll(v) => WebsocketEvent::WindowTickerAll(v),
-                Events::BookTickerEvent(v) => WebsocketEvent::BookTicker(v),
                 Events::BalanceUpdateEvent(v) => WebsocketEvent::BalanceUpdate(v),
                 Events::AccountUpdateEvent(v) => WebsocketEvent::AccountUpdate(v),
                 Events::OrderTradeEvent(v) => WebsocketEvent::OrderTrade(v),
-                Events::AggrTradesEvent(v) => WebsocketEvent::AggrTrades(v),
-                Events::TradeEvent(v) => WebsocketEvent::Trade(v),
                 Events::DayTickerEvent(v) => WebsocketEvent::DayTicker(v),
                 Events::WindowTickerEvent(v) => WebsocketEvent::WindowTicker(v),
                 Events::KlineEvent(v) => WebsocketEvent::Kline(v),
-                Events::OrderBook(v) => WebsocketEvent::OrderBook(v),
-                Events::DepthOrderBookEvent(v) => WebsocketEvent::DepthOrderBook(v),
             };
             (self.handler)(action)?;
         }

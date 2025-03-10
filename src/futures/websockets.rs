@@ -75,6 +75,7 @@ pub enum FuturesWebsocketEvent {
 pub struct FuturesWebSockets<'a> {
     pub socket: Option<(WebSocket<MaybeTlsStream<TcpStream>>, Response)>,
     handler: Box<dyn FnMut(FuturesWebsocketEvent) -> Result<()> + 'a>,
+    combined: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -101,6 +102,12 @@ enum FuturesEvents {
     UserDataStreamExpiredEvent(UserDataStreamExpiredEvent),
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct CombinedFuturesStreamEvents {
+    stream: String,
+    data: FuturesEvents,
+}
+
 impl<'a> FuturesWebSockets<'a> {
     pub fn new<Callback>(handler: Callback) -> FuturesWebSockets<'a>
     where
@@ -109,16 +116,19 @@ impl<'a> FuturesWebSockets<'a> {
         FuturesWebSockets {
             socket: None,
             handler: Box::new(handler),
+            combined: false,
         }
     }
 
     pub fn connect(&mut self, market: &FuturesMarket, subscription: &'a str) -> Result<()> {
+        self.combined = false;
         self.connect_wss(&FuturesWebsocketAPI::Default.params(market, subscription))
     }
 
     pub fn connect_with_config(
         &mut self, market: &FuturesMarket, subscription: &'a str, config: &'a Config,
     ) -> Result<()> {
+        self.combined = false;
         self.connect_wss(
             &FuturesWebsocketAPI::Custom(config.ws_endpoint.clone()).params(market, subscription),
         )
@@ -127,6 +137,7 @@ impl<'a> FuturesWebSockets<'a> {
     pub fn connect_multiple_streams(
         &mut self, market: &FuturesMarket, endpoints: &[String],
     ) -> Result<()> {
+        self.combined = true;
         self.connect_wss(&FuturesWebsocketAPI::MultiStream.params(market, &endpoints.join("/")))
     }
 
@@ -153,18 +164,23 @@ impl<'a> FuturesWebSockets<'a> {
     }
 
     pub fn handle_msg(&mut self, msg: &str) -> Result<()> {
-        let value: serde_json::Value = serde_json::from_str(msg)?;
-
-        if let Some(data) = value.get("data") {
-            self.handle_msg(&data.to_string())?;
-            return Ok(());
+        let event_result = if self.combined {
+            serde_json::from_str::<CombinedFuturesStreamEvents>(msg).map(|c| c.data)
         }
+        else {
+            serde_json::from_str::<FuturesEvents>(msg)
+        };
 
-        if let Ok(events) = serde_json::from_value::<FuturesEvents>(value) {
+        if let Ok(events) = event_result {
             let action = match events {
-                FuturesEvents::Vec(v) => FuturesWebsocketEvent::DayTickerAll(v),
-                FuturesEvents::DayTickerEvent(v) => FuturesWebsocketEvent::DayTicker(v),
                 FuturesEvents::BookTickerEvent(v) => FuturesWebsocketEvent::BookTicker(v),
+                FuturesEvents::OrderBook(v) => FuturesWebsocketEvent::OrderBook(v),
+                FuturesEvents::DepthOrderBookEvent(v) => FuturesWebsocketEvent::DepthOrderBook(v),
+                FuturesEvents::AggrTradesEvent(v) => FuturesWebsocketEvent::AggrTrades(v),
+                FuturesEvents::TradeEvent(v) => FuturesWebsocketEvent::Trade(v),
+                FuturesEvents::Vec(v) => FuturesWebsocketEvent::DayTickerAll(v),
+                FuturesEvents::LiquidationEvent(v) => FuturesWebsocketEvent::Liquidation(v),
+                FuturesEvents::DayTickerEvent(v) => FuturesWebsocketEvent::DayTicker(v),
                 FuturesEvents::MiniTickerEvent(v) => FuturesWebsocketEvent::MiniTicker(v),
                 FuturesEvents::VecMiniTickerEvent(v) => FuturesWebsocketEvent::MiniTickerAll(v),
                 FuturesEvents::AccountUpdateEvent(v) => FuturesWebsocketEvent::AccountUpdate(v),
@@ -172,14 +188,9 @@ impl<'a> FuturesWebSockets<'a> {
                 FuturesEvents::IndexPriceEvent(v) => FuturesWebsocketEvent::IndexPrice(v),
                 FuturesEvents::MarkPriceEvent(v) => FuturesWebsocketEvent::MarkPrice(v),
                 FuturesEvents::VecMarkPriceEvent(v) => FuturesWebsocketEvent::MarkPriceAll(v),
-                FuturesEvents::TradeEvent(v) => FuturesWebsocketEvent::Trade(v),
                 FuturesEvents::ContinuousKlineEvent(v) => FuturesWebsocketEvent::ContinuousKline(v),
                 FuturesEvents::IndexKlineEvent(v) => FuturesWebsocketEvent::IndexKline(v),
-                FuturesEvents::LiquidationEvent(v) => FuturesWebsocketEvent::Liquidation(v),
                 FuturesEvents::KlineEvent(v) => FuturesWebsocketEvent::Kline(v),
-                FuturesEvents::OrderBook(v) => FuturesWebsocketEvent::OrderBook(v),
-                FuturesEvents::DepthOrderBookEvent(v) => FuturesWebsocketEvent::DepthOrderBook(v),
-                FuturesEvents::AggrTradesEvent(v) => FuturesWebsocketEvent::AggrTrades(v),
                 FuturesEvents::UserDataStreamExpiredEvent(v) => {
                     FuturesWebsocketEvent::UserDataStreamExpiredEvent(v)
                 }
