@@ -80,9 +80,11 @@ pub struct FuturesWebSockets<'a> {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(untagged)]
 enum FuturesEvents {
+    BookTickerEvent(BookTickerEvent),
+    OrderBook(OrderBook),
+    DepthOrderBookEvent(DepthOrderBookEvent),
     Vec(Vec<DayTickerEvent>),
     DayTickerEvent(DayTickerEvent),
-    BookTickerEvent(BookTickerEvent),
     MiniTickerEvent(MiniTickerEvent),
     VecMiniTickerEvent(Vec<MiniTickerEvent>),
     AccountUpdateEvent(AccountUpdateEvent),
@@ -96,8 +98,6 @@ enum FuturesEvents {
     ContinuousKlineEvent(ContinuousKlineEvent),
     IndexKlineEvent(IndexKlineEvent),
     LiquidationEvent(LiquidationEvent),
-    OrderBook(OrderBook),
-    DepthOrderBookEvent(DepthOrderBookEvent),
     UserDataStreamExpiredEvent(UserDataStreamExpiredEvent),
 }
 
