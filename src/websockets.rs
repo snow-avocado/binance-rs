@@ -138,24 +138,26 @@ impl<'a> WebSockets<'a> {
         else {
             serde_json::from_str::<Events>(msg)
         };
-
-        if let Ok(events) = event_result {
-            let action = match events {
-                Events::BookTickerEvent(v) => WebsocketEvent::BookTicker(v),
-                Events::OrderBook(v) => WebsocketEvent::OrderBook(v),
-                Events::DepthOrderBookEvent(v) => WebsocketEvent::DepthOrderBook(v),
-                Events::AggrTradesEvent(v) => WebsocketEvent::AggrTrades(v),
-                Events::TradeEvent(v) => WebsocketEvent::Trade(v),
-                Events::DayTickerEventAll(v) => WebsocketEvent::DayTickerAll(v),
-                Events::WindowTickerEventAll(v) => WebsocketEvent::WindowTickerAll(v),
-                Events::BalanceUpdateEvent(v) => WebsocketEvent::BalanceUpdate(v),
-                Events::AccountUpdateEvent(v) => WebsocketEvent::AccountUpdate(v),
-                Events::OrderTradeEvent(v) => WebsocketEvent::OrderTrade(v),
-                Events::DayTickerEvent(v) => WebsocketEvent::DayTicker(v),
-                Events::WindowTickerEvent(v) => WebsocketEvent::WindowTicker(v),
-                Events::KlineEvent(v) => WebsocketEvent::Kline(v),
-            };
-            (self.handler)(action)?;
+        match event_result {
+            Ok(events) => {
+                let action = match events {
+                    Events::BookTickerEvent(v) => WebsocketEvent::BookTicker(v),
+                    Events::OrderBook(v) => WebsocketEvent::OrderBook(v),
+                    Events::DepthOrderBookEvent(v) => WebsocketEvent::DepthOrderBook(v),
+                    Events::AggrTradesEvent(v) => WebsocketEvent::AggrTrades(v),
+                    Events::TradeEvent(v) => WebsocketEvent::Trade(v),
+                    Events::DayTickerEventAll(v) => WebsocketEvent::DayTickerAll(v),
+                    Events::WindowTickerEventAll(v) => WebsocketEvent::WindowTickerAll(v),
+                    Events::BalanceUpdateEvent(v) => WebsocketEvent::BalanceUpdate(v),
+                    Events::AccountUpdateEvent(v) => WebsocketEvent::AccountUpdate(v),
+                    Events::OrderTradeEvent(v) => WebsocketEvent::OrderTrade(v),
+                    Events::DayTickerEvent(v) => WebsocketEvent::DayTicker(v),
+                    Events::WindowTickerEvent(v) => WebsocketEvent::WindowTicker(v),
+                    Events::KlineEvent(v) => WebsocketEvent::Kline(v),
+                };
+                (self.handler)(action)?;
+            },
+            Err(e) => log::error!("Error on handling stream message: {}", e),
         }
         Ok(())
     }
