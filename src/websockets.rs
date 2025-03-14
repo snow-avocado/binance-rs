@@ -157,7 +157,7 @@ impl<'a> WebSockets<'a> {
                 };
                 (self.handler)(action)?;
             },
-            Err(e) => log::error!("Error on handling stream message: {}", e),
+            Err(e) => log::error!("Error on handling stream message: {} msg: {}", e, msg),
         }
         Ok(())
     }
